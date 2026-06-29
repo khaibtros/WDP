@@ -4,6 +4,8 @@ const RoomCategory = require("../models/RoomCategory");
 const Task = require("../models/Task");
 const Invoice = require("../models/Invoice");
 const Customer = require("../models/Customer");
+const User = require("../models/User");
+const Role = require("../models/Role");
 
 const { createError } = require("../utils/error.util");
 const { calculateBilling } = require("./billing.service");
@@ -114,7 +116,31 @@ const checkoutReservation = async (reservationId, userId) => {
   room.status = "available";
   await room.save();
 
-  // 11. Tạo housekeeping task tự động
+  // 11. Tạo housekeeping task tự động và assign cho nhân viên housekeeping
+  let assignedTo = null;
+  try {
+    const housekeepingRole = await Role.findOne({ roleName: "housekeeping" });
+    if (housekeepingRole) {
+      const housekeepers = await User.find({ roleId: housekeepingRole._id, status: "active" });
+      if (housekeepers.length > 0) {
+        // Đếm số lượng task đang làm/chưa làm của từng housekeeper
+        const taskCounts = await Promise.all(housekeepers.map(async (hk) => {
+          const count = await Task.countDocuments({
+            assignedTo: hk._id,
+            status: { $in: ["pending", "in_progress"] }
+          });
+          return { hk, count };
+        }));
+        
+        // Sắp xếp tăng dần theo số lượng task, chọn người có ít task nhất
+        taskCounts.sort((a, b) => a.count - b.count);
+        assignedTo = taskCounts[0].hk._id;
+      }
+    }
+  } catch (error) {
+    console.error("Lỗi khi tự động assign task cho housekeeping:", error);
+  }
+
   await Task.create({
     taskType: "housekeeping",
     description: `Clean room ${room.roomNumber}`,
@@ -123,6 +149,7 @@ const checkoutReservation = async (reservationId, userId) => {
     unitPrice: 0,
     status: "pending",
     orderedBy: userId,
+    assignedTo: assignedTo,
   });
 
   return {
