@@ -19,6 +19,7 @@ app.use("/api/rooms", require("./src/routes/room.routes"));
 app.use("/api/reservations", require("./src/routes/reservation.routes"));
 app.use("/api/check-outs", require("./src/routes/checkout.routes"));
 app.use("/api/tickets", require("./src/routes/ticket.routes"));
+app.use("/api/reports", require("./src/routes/report.routes"));
 
 
 const startServer = async () => {
